@@ -29,114 +29,79 @@ export default function AppointmentsPage() {
     if (!error) setAppointments(data);
   }
 
-  function generateTimeSlots(startTime, endTime, duration) {
-    const slots = [];
-    let currentTime = new Date(`${date}T${startTime}`);
-    const endDateTime = new Date(`${date}T${endTime}`);
-    
-    // On génère des créneaux de la durée totale des services
-    while (currentTime.getTime() + duration * 60000 <= endDateTime.getTime()) {
-      const slotEnd = new Date(currentTime.getTime() + duration * 60000);
-      // On vérifie que le créneau ne dépasse pas la fin de la disponibilité
-      if (slotEnd.getTime() <= endDateTime.getTime()) {
-        slots.push({
-          start_time: currentTime.toTimeString().slice(0, 5),
-          end_time: slotEnd.toTimeString().slice(0, 5)
-        });
-      }
-      // On avance de 30 minutes pour le prochain créneau
-      currentTime = new Date(currentTime.getTime() + 30 * 60000);
-    }
-    return slots;
-  }
-
-  function isSlotOverlapping(slot, appointments) {
-    const slotStart = new Date(`${date}T${slot.start_time}`);
-    const slotEnd = new Date(`${date}T${slot.end_time}`);
-    
-    console.log(`\nVérification du créneau ${slot.start_time}-${slot.end_time}:`);
-    
-    return appointments.some(appointment => {
-      const appointmentStart = new Date(`${date}T${appointment.start_time}`);
-      const appointmentEnd = new Date(`${date}T${appointment.end_time}`);
-      
-      console.log(`Comparaison avec le RDV ${appointment.start_time}-${appointment.end_time}:`);
-      console.log(`Slot: ${slotStart.toISOString()} - ${slotEnd.toISOString()}`);
-      console.log(`RDV: ${appointmentStart.toISOString()} - ${appointmentEnd.toISOString()}`);
-      
-      // Un créneau est indisponible si :
-      // 1. Il commence pendant un rendez-vous existant
-      // 2. Il se termine pendant un rendez-vous existant
-      // 3. Il englobe complètement un rendez-vous existant
-      const isOverlapping = (slotStart >= appointmentStart && slotStart < appointmentEnd) ||
-                          (slotEnd > appointmentStart && slotEnd <= appointmentEnd) ||
-                          (slotStart <= appointmentStart && slotEnd >= appointmentEnd);
-      
-      console.log(`Chevauchement: ${isOverlapping}`);
-      return isOverlapping;
-    });
-  }
-
   const fetchAvailableSlots = useCallback(async () => {
     if (!date) return;
+
+    function generateTimeSlots(startTime, endTime, duration) {
+      const slots = [];
+      let currentTime = new Date(`${date}T${startTime}`);
+      const endDateTime = new Date(`${date}T${endTime}`);
+      
+      while (currentTime.getTime() + duration * 60000 <= endDateTime.getTime()) {
+        const slotEnd = new Date(currentTime.getTime() + duration * 60000);
+        if (slotEnd.getTime() <= endDateTime.getTime()) {
+          slots.push({
+            start_time: currentTime.toTimeString().slice(0, 5),
+            end_time: slotEnd.toTimeString().slice(0, 5)
+          });
+        }
+        currentTime = new Date(currentTime.getTime() + 30 * 60000);
+      }
+      return slots;
+    }
+
+    function isSlotOverlapping(slot, appointments) {
+      const slotStart = new Date(`${date}T${slot.start_time}`);
+      const slotEnd = new Date(`${date}T${slot.end_time}`);
+      
+      return appointments.some(appointment => {
+        const appointmentStart = new Date(`${date}T${appointment.start_time}`);
+        const appointmentEnd = new Date(`${date}T${appointment.end_time}`);
+        
+        return (slotStart >= appointmentStart && slotStart < appointmentEnd) ||
+               (slotEnd > appointmentStart && slotEnd <= appointmentEnd) ||
+               (slotStart <= appointmentStart && slotEnd >= appointmentEnd);
+      });
+    }
 
     console.log("Date sélectionnée:", date);
     console.log("Services sélectionnés:", selectedServices);
 
-    // Récupérer les créneaux disponibles pour la date sélectionnée
     const { data: availabilities, error: availError } = await supabase
       .from("availabilities")
       .select("*")
       .eq("date", date);
-
-    console.log("Créneaux disponibles (availabilities):", availabilities);
 
     if (availError) {
       console.error("Erreur lors de la récupération des créneaux:", availError);
       return;
     }
 
-    // Récupérer les rendez-vous existants pour la date sélectionnée
     const { data: existingAppointments, error: appError } = await supabase
       .from("appointments")
       .select("id, first_name, last_name, date, start_time, end_time, services, total")
       .eq("date", date)
       .order('start_time', { ascending: true });
 
-    console.log("Requête des rendez-vous pour la date:", date);
-    console.log("Rendez-vous existants (appointments):", existingAppointments);
-
     if (appError) {
       console.error("Erreur lors de la récupération des rendez-vous:", appError);
       return;
     }
 
-    // Calculer la durée totale des services sélectionnés
     const totalDuration = selectedServices.reduce((sum, service) => sum + service.duration, 0);
-    console.log("Durée totale des services:", totalDuration);
 
-    // Générer tous les créneaux possibles pour chaque disponibilité
     let allPossibleSlots = [];
     availabilities.forEach(availability => {
       const slots = generateTimeSlots(availability.start_time, availability.end_time, totalDuration);
       allPossibleSlots = [...allPossibleSlots, ...slots];
     });
 
-    console.log("Tous les créneaux possibles:", allPossibleSlots);
+    const available = allPossibleSlots.filter(slot => !isSlotOverlapping(slot, existingAppointments || []));
 
-    // Filtrer les créneaux qui chevauchent des rendez-vous existants
-    const available = allPossibleSlots.filter(slot => {
-      const isOverlapping = isSlotOverlapping(slot, existingAppointments || []);
-      console.log(`Créneau ${slot.start_time}-${slot.end_time} est ${isOverlapping ? 'indisponible' : 'disponible'}`);
-      return !isOverlapping;
-    });
-
-    // Trier les créneaux par heure de début
     available.sort((a, b) => {
       return new Date(`${date}T${a.start_time}`) - new Date(`${date}T${b.start_time}`);
     });
 
-    console.log("Créneaux filtrés (disponibles):", available);
     setAvailableSlots(available);
   }, [date, selectedServices]);
 

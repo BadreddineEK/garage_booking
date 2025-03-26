@@ -265,7 +265,7 @@ export default function DashboardGaragiste() {
         {/* Section des statistiques */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-100">
-            <h3 className="text-sm font-medium text-gray-700">Chiffre d'affaires</h3>
+            <h3 className="text-sm font-medium text-gray-700">Chiffre d&apos;affaires</h3>
             <p className="text-2xl font-bold text-green-600">{stats.totalRevenue}€</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-100">
@@ -285,7 +285,7 @@ export default function DashboardGaragiste() {
             </p>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-100">
-            <h3 className="text-sm font-medium text-gray-700">Taux d'occupation</h3>
+            <h3 className="text-sm font-medium text-gray-700">Taux d&apos;occupation</h3>
             <p className="text-2xl font-bold text-indigo-600">
               {stats.occupancyRate.toFixed(1)}%
             </p>
