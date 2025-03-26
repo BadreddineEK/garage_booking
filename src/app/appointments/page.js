@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import supabase from "@/utils/supabase";
 import { sendConfirmationEmails } from '@/utils/resend';
 
@@ -77,7 +77,7 @@ export default function AppointmentsPage() {
     });
   }
 
-  async function fetchAvailableSlots() {
+  const fetchAvailableSlots = useCallback(async () => {
     if (!date) return;
 
     console.log("Date sélectionnée:", date);
@@ -138,7 +138,7 @@ export default function AppointmentsPage() {
 
     console.log("Créneaux filtrés (disponibles):", available);
     setAvailableSlots(available);
-  }
+  }, [date, selectedServices]);
 
   useEffect(() => {
     fetchAppointments();

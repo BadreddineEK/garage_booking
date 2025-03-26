@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import supabase from "@/utils/supabase";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
@@ -56,7 +56,7 @@ export default function DashboardGaragiste() {
   // Générer les options d'heures (0-23)
   const hourOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 
-  async function fetchAppointments() {
+  const fetchAppointments = useCallback(async () => {
     const formattedDate = formatDateToYYYYMMDD(selectedDate);
     console.log("\n=== Récupération des rendez-vous ===");
     console.log("Date sélectionnée:", formattedDate);
@@ -75,9 +75,9 @@ export default function DashboardGaragiste() {
     console.log("Rendez-vous filtrés pour la date:", filteredAppointments);
 
     setAppointments(filteredAppointments);
-  }
+  }, [selectedDate]);
 
-  async function fetchAvailability() {
+  const fetchAvailability = useCallback(async () => {
     const formattedDate = formatDateToYYYYMMDD(selectedDate);
     console.log("\n=== Récupération des disponibilités ===");
     console.log("Date sélectionnée:", formattedDate);
@@ -96,7 +96,14 @@ export default function DashboardGaragiste() {
     console.log("Disponibilités filtrées pour la date:", filteredAvailabilities);
 
     setAvailability(filteredAvailabilities);
-  }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    console.log("\n=== Changement de date ===");
+    console.log("Nouvelle date sélectionnée:", selectedDate.toLocaleDateString('fr-FR'));
+    fetchAppointments();
+    fetchAvailability();
+  }, [selectedDate, fetchAppointments, fetchAvailability]);
 
   // Fonction pour calculer les statistiques
   function calculateStats(appointments, availabilities) {
@@ -127,13 +134,6 @@ export default function DashboardGaragiste() {
       occupancyRate
     };
   }
-
-  useEffect(() => {
-    console.log("\n=== Changement de date ===");
-    console.log("Nouvelle date sélectionnée:", selectedDate.toLocaleDateString('fr-FR'));
-    fetchAppointments();
-    fetchAvailability();
-  }, [selectedDate, fetchAppointments, fetchAvailability]);
 
   useEffect(() => {
     const newStats = calculateStats(appointments, availabilities);
