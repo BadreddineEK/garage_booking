@@ -148,7 +148,7 @@ export default function AppointmentsPage() {
     if (date && selectedServices.length > 0) {
       fetchAvailableSlots();
     }
-  }, [date, selectedServices]);
+  }, [date, selectedServices, fetchAvailableSlots]);
 
   useEffect(() => {
     const newTotal = selectedServices.reduce((sum, service) => sum + service.price, 0);

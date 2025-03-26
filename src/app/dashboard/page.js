@@ -133,7 +133,7 @@ export default function DashboardGaragiste() {
     console.log("Nouvelle date sélectionnée:", selectedDate.toLocaleDateString('fr-FR'));
     fetchAppointments();
     fetchAvailability();
-  }, [selectedDate]);
+  }, [selectedDate, fetchAppointments, fetchAvailability]);
 
   useEffect(() => {
     const newStats = calculateStats(appointments, availabilities);

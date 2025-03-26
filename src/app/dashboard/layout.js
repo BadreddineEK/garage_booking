@@ -42,7 +42,7 @@ export default function DashboardLayout({ children }) {
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Vue d'ensemble
+            Vue d&apos;ensemble
           </button>
           <button
             onClick={() => scrollToSection('appointments')}

@@ -72,7 +72,7 @@ export default function Home() {
             </p>
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">⏰ Horaires d'ouverture</h3>
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">⏰ Horaires d&apos;ouverture</h3>
             <p className="text-gray-700">
               Lundi - Vendredi : 8h00 - 19h00<br />
               Samedi : 9h00 - 17h00<br />
