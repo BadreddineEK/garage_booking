@@ -66,8 +66,8 @@ export default function Home() {
           <div>
             <h3 className="text-xl font-semibold text-gray-800 mb-4">📍 Adresse</h3>
             <p className="text-gray-700">
-              123 Rue du Garage<br />
-              75000 Paris<br />
+              604 Route de Geneve<br />
+              01700 Beynost<br />
               France
             </p>
           </div>
@@ -76,14 +76,15 @@ export default function Home() {
             <p className="text-gray-700">
               Lundi - Vendredi : 8h00 - 19h00<br />
               Samedi : 9h00 - 17h00<br />
-              Dimanche : Fermé
+              Dimanche : 9h00 - 12h00
             </p>
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-800 mb-4">📞 Contact</h3>
             <p className="text-gray-700">
-              Téléphone : 01 23 45 67 89<br />
-              Email : contact@garage.fr
+              Téléphone : 07 45 82 08 94<br />
+              Email : contact@garage.fr<br />
+              Snapchat : OG.AUTO69
             </p>
           </div>
           <div>
