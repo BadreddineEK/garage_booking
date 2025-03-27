@@ -841,7 +841,7 @@ export default function AppointmentsPage() {
               onClick={() => window.location.href = '/'}
               className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
             >
-              Retour à l'accueil
+              Retour à l&apos;accueil
             </button>
           </div>
         </div>
