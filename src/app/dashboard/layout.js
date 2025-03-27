@@ -34,7 +34,7 @@ export default function DashboardLayout({ children }) {
       {/* Bouton hamburger pour mobile */}
       <button
         onClick={() => setIsMenuOpen(!isMenuOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white shadow-md"
+        className="lg:hidden fixed top-4 right-4 z-50 p-2 rounded-md bg-white shadow-md"
       >
         <svg
           className="w-6 h-6"
@@ -62,8 +62,8 @@ export default function DashboardLayout({ children }) {
 
       {/* Sidebar */}
       <div className={`
-        fixed lg:static inset-y-0 left-0 z-40
-        transform ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        fixed lg:static inset-y-0 right-0 z-40
+        transform ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}
         lg:translate-x-0 transition-transform duration-300 ease-in-out
         w-64 bg-white shadow-lg
       `}>

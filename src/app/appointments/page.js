@@ -2,19 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import supabase from "@/utils/supabase";
-import { sendConfirmationEmails } from '@/utils/resend';
-
-const SERVICES = [
-  { id: 1, name: "Lavage intérieur express", price: 40, duration: 30 },
-  { id: 2, name: "Lavage intérieur intégral", price: 50, duration: 60 },
-  { id: 3, name: "Lavage extérieur express", price: 20, duration: 20 },
-  { id: 4, name: "Lavage extérieur intégral", price: 30, duration: 40 },
-];
+import Image from 'next/image';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 export default function AppointmentsPage() {
+  const [step, setStep] = useState(1);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [tempEmail, setTempEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [date, setDate] = useState("");
   const [appointments, setAppointments] = useState([]);
@@ -23,6 +20,57 @@ export default function AppointmentsPage() {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [showSummary, setShowSummary] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("lavage");
+  const [availableDates, setAvailableDates] = useState([]);
+  const [activeStartDate, setActiveStartDate] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [services, setServices] = useState([]);
+
+  // Récupérer les services depuis la base de données
+  useEffect(() => {
+    async function fetchServices() {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('category', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Erreur lors de la récupération des services:', error);
+        return;
+      }
+
+      // Organiser les services par catégorie
+      const servicesByCategory = data.reduce((acc, service) => {
+        if (!acc[service.category]) {
+          acc[service.category] = [];
+        }
+        acc[service.category].push(service);
+        return acc;
+      }, {});
+
+      setServices(servicesByCategory);
+    }
+
+    fetchServices();
+  }, []);
+
+  // Récupérer le service présélectionné depuis l'URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const serviceId = params.get('service');
+    if (serviceId) {
+      // Trouver le service dans toutes les catégories
+      Object.values(services).forEach(categoryServices => {
+        const service = categoryServices.find(s => s.id === parseInt(serviceId));
+        if (service) {
+          setSelectedServices([service]);
+          setActiveCategory(service.category);
+        }
+      });
+    }
+  }, [services]);
 
   async function fetchAppointments() {
     let { data, error } = await supabase.from("appointments").select("*");
@@ -30,80 +78,135 @@ export default function AppointmentsPage() {
   }
 
   const fetchAvailableSlots = useCallback(async () => {
-    if (!date) return;
+    if (!date || selectedServices.length === 0) {
+      setAvailableSlots([]);
+      return;
+    }
 
-    function generateTimeSlots(startTime, endTime, duration) {
-      const slots = [];
-      let currentTime = new Date(`${date}T${startTime}`);
-      const endDateTime = new Date(`${date}T${endTime}`);
-      
-      while (currentTime.getTime() + duration * 60000 <= endDateTime.getTime()) {
-        const slotEnd = new Date(currentTime.getTime() + duration * 60000);
-        if (slotEnd.getTime() <= endDateTime.getTime()) {
-          slots.push({
-            start_time: currentTime.toTimeString().slice(0, 5),
-            end_time: slotEnd.toTimeString().slice(0, 5)
-          });
-        }
-        currentTime = new Date(currentTime.getTime() + 30 * 60000);
+    try {
+      // Calculer la durée totale des services sélectionnés
+      const totalDuration = selectedServices.reduce((sum, service) => sum + service.duration, 0);
+
+      // Récupérer les rendez-vous existants pour la date sélectionnée
+      const { data: existingAppointments, error: appointmentsError } = await supabase
+        .from("appointments")
+        .select("start_time, end_time")
+        .eq("date", date);
+
+      if (appointmentsError) {
+        console.error("Erreur lors de la récupération des rendez-vous:", appointmentsError);
+        return;
       }
-      return slots;
-    }
 
-    function isSlotOverlapping(slot, appointments) {
-      const slotStart = new Date(`${date}T${slot.start_time}`);
-      const slotEnd = new Date(`${date}T${slot.end_time}`);
-      
-      return appointments.some(appointment => {
-        const appointmentStart = new Date(`${date}T${appointment.start_time}`);
-        const appointmentEnd = new Date(`${date}T${appointment.end_time}`);
-        
-        return (slotStart >= appointmentStart && slotStart < appointmentEnd) ||
-               (slotEnd > appointmentStart && slotEnd <= appointmentEnd) ||
-               (slotStart <= appointmentStart && slotEnd >= appointmentEnd);
+      // Récupérer les disponibilités pour la date sélectionnée
+      const { data: availabilities, error: availabilitiesError } = await supabase
+        .from("availabilities")
+        .select("start_time, end_time")
+        .eq("date", date);
+
+      if (availabilitiesError) {
+        console.error("Erreur lors de la récupération des disponibilités:", availabilitiesError);
+        return;
+      }
+
+      // Si aucune disponibilité n'est définie pour cette date, retourner un tableau vide
+      if (!availabilities || availabilities.length === 0) {
+        setAvailableSlots([]);
+        return;
+      }
+
+      // Convertir les heures de début et de fin en objets Date
+      const startTime = new Date(`${date}T${availabilities[0].start_time}`);
+      const endTime = new Date(`${date}T${availabilities[0].end_time}`);
+
+      // Générer tous les créneaux possibles
+      const allSlots = [];
+      let currentTime = new Date(startTime);
+
+      while (currentTime < endTime) {
+        const slotStart = currentTime.toTimeString().slice(0, 5);
+        const slotEnd = new Date(currentTime.getTime() + totalDuration * 60000).toTimeString().slice(0, 5);
+        allSlots.push(`${slotStart}-${slotEnd}`);
+        currentTime = new Date(currentTime.getTime() + 30 * 60000); // Incrémenter de 30 minutes
+      }
+
+      // Filtrer les créneaux qui chevauchent des rendez-vous existants
+      const available = allSlots.filter(slot => {
+        const [slotStart, slotEnd] = slot.split("-");
+        return !existingAppointments.some(appointment => {
+      const appointmentStart = new Date(`${date}T${appointment.start_time}`);
+      const appointmentEnd = new Date(`${date}T${appointment.end_time}`);
+          const slotStartTime = new Date(`${date}T${slotStart}`);
+          const slotEndTime = new Date(`${date}T${slotEnd}`);
+          return (
+            (slotStartTime >= appointmentStart && slotStartTime < appointmentEnd) ||
+            (slotEndTime > appointmentStart && slotEndTime <= appointmentEnd) ||
+            (slotStartTime <= appointmentStart && slotEndTime >= appointmentEnd)
+          );
+        });
       });
+
+      setAvailableSlots(available);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des créneaux:", error);
+      setAvailableSlots([]);
     }
-
-    console.log("Date sélectionnée:", date);
-    console.log("Services sélectionnés:", selectedServices);
-
-    const { data: availabilities, error: availError } = await supabase
-      .from("availabilities")
-      .select("*")
-      .eq("date", date);
-
-    if (availError) {
-      console.error("Erreur lors de la récupération des créneaux:", availError);
-      return;
-    }
-
-    const { data: existingAppointments, error: appError } = await supabase
-      .from("appointments")
-      .select("id, first_name, last_name, date, start_time, end_time, services, total")
-      .eq("date", date)
-      .order('start_time', { ascending: true });
-
-    if (appError) {
-      console.error("Erreur lors de la récupération des rendez-vous:", appError);
-      return;
-    }
-
-    const totalDuration = selectedServices.reduce((sum, service) => sum + service.duration, 0);
-
-    let allPossibleSlots = [];
-    availabilities.forEach(availability => {
-      const slots = generateTimeSlots(availability.start_time, availability.end_time, totalDuration);
-      allPossibleSlots = [...allPossibleSlots, ...slots];
-    });
-
-    const available = allPossibleSlots.filter(slot => !isSlotOverlapping(slot, existingAppointments || []));
-
-    available.sort((a, b) => {
-      return new Date(`${date}T${a.start_time}`) - new Date(`${date}T${b.start_time}`);
-    });
-
-    setAvailableSlots(available);
   }, [date, selectedServices]);
+
+  const fetchAvailableDates = useCallback(async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayString = today.toISOString().split('T')[0];
+    const currentYear = today.getFullYear();
+    
+    console.log("Date du jour:", todayString);
+    console.log("Année en cours:", currentYear);
+
+    // Récupérer les disponibilités pour aujourd'hui et les jours suivants
+    const { data: availabilities, error } = await supabase
+      .from("availabilities")
+      .select("date")
+      .gte("date", todayString)
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error("Erreur lors de la récupération des dates disponibles:", error);
+      return;
+    }
+
+    // Si aucune disponibilité n'est trouvée, on crée les dates pour l'année en cours
+    if (!availabilities || availabilities.length === 0) {
+      const dates = [];
+      const startDate = new Date(currentYear, 0, 1); // 1er janvier de l'année en cours
+      const endDate = new Date(currentYear, 11, 31); // 31 décembre de l'année en cours
+      
+      // Créer des disponibilités pour chaque jour de l'année
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dateString = d.toISOString().split('T')[0];
+        dates.push(dateString);
+      }
+
+      // Insérer les dates dans la base de données
+      for (const dateString of dates) {
+        await supabase
+          .from("availabilities")
+          .insert([
+            {
+              date: dateString,
+              start_time: "08:00:00",
+              end_time: "19:00:00"
+            }
+          ]);
+      }
+
+      setAvailableDates(dates);
+      return;
+    }
+
+    const dates = availabilities.map(a => a.date);
+    console.log("Dates disponibles dans la base de données:", dates);
+    setAvailableDates(dates);
+  }, []);
 
   useEffect(() => {
     fetchAppointments();
@@ -120,15 +223,41 @@ export default function AppointmentsPage() {
     setTotal(newTotal);
   }, [selectedServices]);
 
-  const handleServiceSelect = (serviceId) => {
-    const service = SERVICES.find(s => s.id === parseInt(serviceId));
-    if (service && !selectedServices.some(s => s.id === service.id)) {
-      setSelectedServices([...selectedServices, service]);
-    }
+  useEffect(() => {
+    fetchAvailableDates();
+  }, [fetchAvailableDates]);
+
+  const handleServiceSelect = (service) => {
+    setSelectedServices(prev => {
+      const exists = prev.some(s => s.id === service.id);
+      if (exists) {
+        return prev.filter(s => s.id !== service.id);
+      }
+      return [...prev, service];
+    });
   };
 
-  const removeService = (serviceId) => {
-    setSelectedServices(selectedServices.filter(service => service.id !== serviceId));
+  const isServiceSelected = (serviceId) => {
+    return selectedServices.some(s => s.id === serviceId);
+  };
+
+  const isServiceDisabled = (service) => {
+    return false; // Plus de logique de désactivation
+  };
+
+  const isDateAvailable = (date) => {
+    const dateString = date.toISOString().split('T')[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayString = today.toISOString().split('T')[0];
+    
+    // Si c'est la date du jour, on la considère toujours comme disponible
+    if (dateString === todayString) {
+      return true;
+    }
+    
+    // Pour les autres dates, on vérifie si elles sont dans les dates disponibles
+    return availableDates.includes(dateString);
   };
 
   async function handleSubmit(e) {
@@ -144,6 +273,7 @@ export default function AppointmentsPage() {
       return;
     }
 
+    setIsLoading(true);
     try {
       const dateObj = new Date(`${date}T${selectedSlot}`);
       const id = dateObj.getDate().toString().padStart(2, '0') +
@@ -152,6 +282,14 @@ export default function AppointmentsPage() {
                  dateObj.getHours().toString().padStart(2, '0') +
                  dateObj.getMinutes().toString().padStart(2, '0');
 
+      // Calculer la durée totale des services
+      const totalDuration = selectedServices.reduce((sum, service) => {
+        return sum + service.duration;
+      }, 0);
+
+      // Extraire l'heure de début du créneau sélectionné
+      const [startTime] = selectedSlot.split('-');
+
       const appointmentData = { 
         id: parseInt(id),
         first_name: firstName,
@@ -159,15 +297,14 @@ export default function AppointmentsPage() {
         email: email || null,
         phone: phone || null,
         date,
-        start_time: selectedSlot,
-        end_time: new Date(new Date(`${date}T${selectedSlot}`).getTime() + 
-          selectedServices.reduce((sum, service) => sum + service.duration, 0) * 60000)
+        start_time: startTime,
+        end_time: new Date(new Date(`${date}T${startTime}`).getTime() + totalDuration * 60000)
           .toTimeString().slice(0, 5),
-        services: JSON.stringify(selectedServices),
+        service_ids: selectedServices.map(s => s.id),
         total: total
       };
 
-      console.log('Données du rendez-vous avant insertion:', appointmentData);
+      console.log("Données du rendez-vous:", appointmentData);
 
       const { error } = await supabase
         .from("appointments")
@@ -176,181 +313,539 @@ export default function AppointmentsPage() {
       if (error) {
         alert(`Erreur d'insertion : ${error.message}`);
       } else {
-        // Envoyer les emails de confirmation
-        console.log('Tentative d\'envoi des emails avec les données:', appointmentData);
-        const emailsSent = await sendConfirmationEmails(appointmentData);
-        if (!emailsSent) {
-          console.warn("Les emails de confirmation n'ont pas pu être envoyés.");
-        }
-
-        setFirstName("");
-        setLastName("");
-        setEmail("");
-        setPhone("");
-        setDate("");
-        setSelectedServices([]);
-        setTotal(0);
-        setSelectedSlot("");
-        setShowSummary(false);
-        alert("Rendez-vous confirmé avec succès !");
+        setIsConfirmed(true);
       }
     } catch (error) {
       alert("Une erreur est survenue lors de l'ajout du rendez-vous.");
       console.error("Erreur :", error);
+    } finally {
+      setIsLoading(false);
     }
   }
 
   return (
-    <div className="p-8 bg-white">
-      <h1 className="text-2xl font-bold mb-4 text-gray-800">Prendre un Rendez-vous</h1>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Progress bar */}
+      <div className="mb-8">
+        <div className="flex justify-between mb-2">
+          <span className={`text-sm ${step >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>Services</span>
+          <span className={`text-sm ${step >= 2 ? 'text-blue-600' : 'text-gray-500'}`}>Date & Heure</span>
+          <span className={`text-sm ${step >= 3 ? 'text-blue-600' : 'text-gray-500'}`}>Informations</span>
+        </div>
+        <div className="h-2 bg-gray-200 rounded-full">
+          <div 
+            className="h-full bg-blue-600 rounded-full transition-all duration-300"
+            style={{ width: `${(step / 3) * 100}%` }}
+          />
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-lg shadow-sm border border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      {/* Step 1: Services */}
+      {step === 1 && (
+        <div className="space-y-8">
+          <h2 className="text-2xl font-bold text-gray-800">Choisissez vos services</h2>
+          
+          {/* Categories */}
+          <div className="flex gap-4 mb-6">
+            {Object.keys(services).map((category) => (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={`px-4 py-2 rounded-full ${
+                  activeCategory === category
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {/* Services Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {services[activeCategory]?.map(service => {
+              // Générer le nom de l'image en fonction du type de service
+              let imageName = service.name.toLowerCase().replace(/\s+/g, '_');
+              if (service.category === 'lavage') {
+                // Pour les services de lavage, réorganiser les mots dans l'ordre correct
+                const words = service.name.toLowerCase().split(' ');
+                if (words.includes('intérieur') || words.includes('extérieur')) {
+                  const type = words.includes('intérieur') ? 'interieur' : 'exterieur';
+                  const variant = words.includes('express') ? 'express' : 'integral';
+                  imageName = `lavage_${type}_${variant}`;
+                }
+              }
+
+              return (
+                <div
+                  key={service.id}
+                  className={`p-6 rounded-lg border relative overflow-hidden ${
+                    selectedServices.some(s => s.id === service.id)
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-300'
+                  } cursor-pointer transition-all duration-200`}
+                  onClick={() => handleServiceSelect(service)}
+                >
+                  {/* Image de fond */}
+                  <div className="absolute inset-0 z-0">
+                    <Image
+                      src={`/images/${imageName}.jpg`}
+                      alt={service.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      className="object-cover opacity-20"
+                    />
+                  </div>
+                  
+                  {/* Contenu */}
+                  <div className="relative z-10">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h3>
+                    <p className="text-gray-600 mb-4">{service.description}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
+                      <span className="text-sm text-gray-500">{service.duration} min</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Next button */}
+          <div className="flex justify-end mt-8">
+            <button
+              onClick={() => setStep(2)}
+              disabled={selectedServices.length === 0}
+              className={`
+                px-6 py-2 rounded-md text-white
+                ${selectedServices.length === 0
+                  ? 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+                }
+              `}
+            >
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Date & Time */}
+      {step === 2 && (
+        <div className="space-y-8">
+          <h2 className="text-2xl font-bold text-gray-800">Choisissez une date et une heure</h2>
+          
+          {/* Calendar and Time Slots */}
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            {/* Date Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sélectionnez une date
+              </label>
+              <div className="flex justify-center">
+                <Calendar
+                  onChange={(value) => {
+                    // Ajuster la date pour éviter le décalage de fuseau horaire
+                    const newDate = new Date(value.getTime() - (value.getTimezoneOffset() * 60000))
+                      .toISOString()
+                      .split('T')[0];
+                    
+                    // Vérifier si la date est valide (pas le jour d'hier)
+                    const selectedDate = new Date(newDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    selectedDate.setHours(0, 0, 0, 0);
+
+                    if (selectedDate < today) {
+                      console.log("Date invalide (jour d'hier ou antérieur)");
+                      return;
+                    }
+
+                    console.log("Date sélectionnée:", newDate);
+                    setDate(newDate);
+                    setSelectedSlot(""); // Réinitialiser le créneau sélectionné
+                    fetchAvailableSlots();
+                  }}
+                  value={date ? new Date(date) : null}
+                  minDate={new Date()} // Commencer à partir d'aujourd'hui
+                  tileDisabled={({ date }) => {
+                    const dateString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+                      .toISOString()
+                      .split('T')[0];
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const todayString = today.toISOString().split('T')[0];
+                    
+                    // Désactiver le jour d'hier et les jours antérieurs
+                    if (dateString < todayString) {
+                      return true;
+                    }
+                    
+                    // Si c'est la date du jour, on la considère toujours comme disponible
+                    if (dateString === todayString) {
+                      return false;
+                    }
+                    
+                    return !availableDates.includes(dateString);
+                  }}
+                  className="rounded-lg border p-2 [&_.react-calendar__tile--weekend]:text-gray-900"
+                  locale="fr-FR"
+                  formatDay={(locale, date) => date.getDate().toString()}
+                  clearIcon={null}
+                  nextLabel="›"
+                  prevLabel="‹"
+                  view="month"
+                  maxDetail="month"
+                  minDetail="month"
+                  showNeighboringMonth={false}
+                  showFixedNumberOfWeeks={false}
+                  showNavigation={true}
+                  showMonthNavigation={true}
+                  showYearNavigation={false}
+                  showDecadeNavigation={false}
+                  showCenturyNavigation={false}
+                  activeStartDate={activeStartDate}
+                  maxDate={(() => {
+                    // Trouver la date la plus éloignée dans availableDates
+                    if (availableDates.length === 0) return null;
+                    const maxDate = new Date(Math.max(...availableDates.map(d => new Date(d))));
+                    // Ajouter un mois pour permettre la navigation
+                    maxDate.setMonth(maxDate.getMonth() + 1);
+                    return maxDate;
+                  })()}
+                  navigationLabel={({ date, label }) => {
+                    const monthNames = [
+                      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+                    ];
+                    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+                  }}
+                  next2Label={null}
+                  prev2Label={null}
+                  onActiveStartDateChange={({ activeStartDate }) => {
+                    console.log("Changement de date active:", activeStartDate);
+                    setActiveStartDate(activeStartDate);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Time Slots */}
+            {date && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Créneaux disponibles
+                </label>
+                {availableSlots.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {availableSlots
+                      .filter(slot => {
+                        const [startTime] = slot.split('-');
+                        const startDateTime = new Date(`${date}T${startTime}`);
+                        const now = new Date();
+                        // Si c'est le jour même, on ne montre que les créneaux futurs
+                        if (date === now.toISOString().split('T')[0]) {
+                          return startDateTime > now;
+                        }
+                        return true;
+                      })
+                      .map((slot) => {
+                        const [startTime, endTime] = slot.split('-');
+                        return (
+                          <button
+                            key={slot}
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`
+                              p-3 rounded-md text-sm font-medium
+                              ${selectedSlot === slot
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                              }
+                            `}
+                          >
+                            <div className="font-semibold">{startTime}</div>
+                            <div className="text-xs opacity-75">
+                              {endTime}
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    Aucun créneau disponible pour cette date
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={() => setStep(1)}
+              className="px-6 py-2 rounded-md text-gray-600 hover:bg-gray-100"
+            >
+              Retour
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              disabled={!date || !selectedSlot}
+              className={`
+                px-6 py-2 rounded-md text-white
+                ${!date || !selectedSlot
+                  ? 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+                }
+              `}
+            >
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: User Information */}
+      {step === 3 && (
+        <div className="space-y-8">
+          <h2 className="text-2xl font-bold text-gray-800">Vos informations</h2>
+          
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Prénom
+                </label>
             <input
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
+                  className="w-full p-2 border rounded-md"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nom
+                </label>
             <input
               type="text"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
+                  className="w-full p-2 border rounded-md"
               required
             />
           </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email (recommandé)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (recommandé)
+                </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
+                  className="w-full p-2 border rounded-md"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Téléphone (optionnel)
+                </label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
+                  className="w-full p-2 border rounded-md"
             />
           </div>
         </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
-            required
-          />
         </div>
         
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Services *</label>
-          <select
-            onChange={(e) => handleServiceSelect(e.target.value)}
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
-            required
-          >
-            <option value="">Sélectionner un service</option>
-            {SERVICES.map(service => (
-              <option key={service.id} value={service.id}>
-                {service.name} - {service.price}€ ({service.duration}min)
-              </option>
-            ))}
-          </select>
+          {/* Navigation buttons */}
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={() => setStep(2)}
+              className="px-6 py-2 rounded-md text-gray-600 hover:bg-gray-100"
+            >
+              Retour
+            </button>
+            <button
+              onClick={() => setShowSummary(true)}
+              disabled={!firstName || !lastName}
+              className={`
+                px-6 py-2 rounded-md text-white
+                ${!firstName || !lastName
+                  ? 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+                }
+              `}
+            >
+              Confirmer
+            </button>
+          </div>
         </div>
+      )}
 
-        {selectedServices.length > 0 && (
-          <div className="mb-4">
-            <h3 className="font-semibold text-gray-800 mb-2">Services sélectionnés :</h3>
-            <ul className="space-y-2">
-              {selectedServices.map(service => (
-                <li key={service.id} className="flex justify-between items-center bg-white p-3 rounded-md border border-gray-200">
-                  <span className="text-gray-700">{service.name} - {service.price}€ ({service.duration}min)</span>
-                  <button
-                    type="button"
-                    onClick={() => removeService(service.id)}
-                    className="text-red-500 hover:text-red-700 transition-colors duration-200"
-                  >
-                    Supprimer
-                  </button>
+      {/* Summary Modal */}
+      {showSummary && !isConfirmed && (
+        <div className="fixed inset-0 bg-white flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Récapitulatif</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-700">Services sélectionnés</h3>
+                <ul className="mt-2 space-y-2">
+                  {selectedServices.map((service) => (
+                    <li key={service.id} className="flex justify-between">
+                      <span>{service.name}</span>
+                      <span>{service.price}€</span>
                 </li>
               ))}
             </ul>
-            <div className="mt-3 font-bold text-gray-800">
-              Total : {total}€
-            </div>
-          </div>
-        )}
+                <div className="mt-2 pt-2 border-t">
+                  <div className="flex justify-between font-bold">
+                    <span>Total</span>
+                    <span>{total}€</span>
+                  </div>
+                </div>
+              </div>
 
-        {date && selectedServices.length > 0 && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Créneaux disponibles :</label>
-            {availableSlots.length > 0 ? (
-              <select 
-                value={selectedSlot}
-                onChange={(e) => setSelectedSlot(e.target.value)} 
-                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 bg-white"
-                required
+              <div>
+                <h3 className="font-semibold text-gray-700">Date et heure</h3>
+                <p className="mt-2">
+                  {new Date(date).toLocaleDateString('fr-FR')} - {selectedSlot}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-700">Informations personnelles</h3>
+                <p className="mt-2">
+                  {firstName} {lastName}<br />
+                  {phone}
+                </p>
+              </div>
+
+              {/* Email option */}
+              {!email && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="font-semibold text-blue-800 mb-2">Recevoir un justificatif par email ?</h3>
+                  <div className="flex gap-4">
+                    <input
+                      type="email"
+                      placeholder="Votre email"
+                      value={tempEmail}
+                      onChange={(e) => setTempEmail(e.target.value)}
+                      className="flex-1 p-2 border rounded-md"
+                    />
+                    <button
+                      onClick={() => {
+                        if (tempEmail) {
+                          setEmail(tempEmail);
+                          setTempEmail("");
+                        }
+                      }}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Valider
+                    </button>
+                  </div>
+                </div>
+              )}
+              {email && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="font-semibold text-blue-800 mb-2">Email de confirmation</h3>
+                  <div className="flex items-center justify-between">
+                    <span>{email}</span>
+                    <button
+                      onClick={() => {
+                        setEmail("");
+                        setTempEmail("");
+                      }}
+                      className="text-sm text-red-600 hover:text-red-800"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-4 mt-6">
+              <button
+                onClick={() => setShowSummary(false)}
+                className="px-6 py-2 rounded-md text-gray-600 hover:bg-gray-100"
               >
-                <option value="">Sélectionner un créneau</option>
-                {availableSlots.map((slot, index) => (
-                  <option key={index} value={slot.start_time}>
-                    {slot.start_time} - {slot.end_time}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="text-red-500">Aucun créneau disponible pour cette date et ces services.</p>
-            )}
-          </div>
-        )}
-
-        {showSummary && (
-          <div className="mb-4 p-4 bg-white rounded-md border border-gray-200">
-            <h3 className="text-xl font-bold mb-4 text-gray-800">Récapitulatif de la réservation</h3>
-            <div className="space-y-2">
-              <p className="text-gray-700"><strong className="text-gray-800">Client :</strong> {firstName} {lastName}</p>
-              {email && <p className="text-gray-700"><strong className="text-gray-800">Email :</strong> {email}</p>}
-              {phone && <p className="text-gray-700"><strong className="text-gray-800">Téléphone :</strong> {phone}</p>}
-              <p className="text-gray-700"><strong className="text-gray-800">Date :</strong> {new Date(date).toLocaleDateString('fr-FR')}</p>
-              <p className="text-gray-700"><strong className="text-gray-800">Heure :</strong> {selectedSlot} - {new Date(new Date(`${date}T${selectedSlot}`).getTime() + 
-                selectedServices.reduce((sum, service) => sum + service.duration, 0) * 60000)
-                .toTimeString().slice(0, 5)}</p>
-              <p className="text-gray-700"><strong className="text-gray-800">Services :</strong></p>
-              <ul className="list-disc pl-5 text-gray-700">
-                {selectedServices.map(service => (
-                  <li key={service.id}>{service.name} - {service.price}€ ({service.duration}min)</li>
-                ))}
-              </ul>
-              <p className="font-bold mt-2 text-gray-800">Total : {total}€</p>
+                Modifier
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isLoading}
+                className={`
+                  px-6 py-2 rounded-md text-white
+                  ${isLoading 
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                  }
+                `}
+              >
+                {isLoading ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Confirmation en cours...
+                  </span>
+                ) : (
+                  'Confirmer le rendez-vous'
+                )}
+              </button>
             </div>
           </div>
+          </div>
         )}
 
-        <button 
-          type="submit" 
-          className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-200"
-        >
-          {showSummary ? "Confirmer le rendez-vous" : "Voir le récapitulatif"}
-        </button>
-      </form>
+      {/* Confirmation Page */}
+      {isConfirmed && (
+        <div className="fixed inset-0 bg-white flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full text-center">
+            <div className="mb-8">
+              <svg className="mx-auto h-16 w-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Rendez-vous confirmé !</h2>
+            <p className="text-lg text-gray-600 mb-8">
+              Votre rendez-vous a été enregistré avec succès.
+              Vous pouvez récupérer votre justificatif sur place.
+            </p>
+            
+            <div className="bg-gray-50 rounded-lg p-6 mb-8 text-left">
+              <h3 className="font-semibold text-gray-700 mb-4">Détails du rendez-vous</h3>
+              <div className="space-y-2">
+                <p><span className="font-medium">Date :</span> {new Date(date).toLocaleDateString('fr-FR')}</p>
+                <p><span className="font-medium">Heure :</span> {selectedSlot}</p>
+                <p><span className="font-medium">Services :</span></p>
+                <ul className="list-disc list-inside">
+                  {selectedServices.map((service) => (
+                    <li key={service.id}>{service.name}</li>
+                  ))}
+                </ul>
+                <p><span className="font-medium">Total :</span> {total}€</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Retour à l'accueil
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

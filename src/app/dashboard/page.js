@@ -51,6 +51,7 @@ export default function DashboardGaragiste() {
     averageAppointmentValue: 0,
     occupancyRate: 0
   });
+  const [services, setServices] = useState([]);
   const minuteOptions = generateMinuteOptions();
 
   // Générer les options d'heures (0-23)
@@ -256,6 +257,32 @@ export default function DashboardGaragiste() {
     }
   }
 
+  // Récupérer les services depuis la base de données
+  useEffect(() => {
+    async function fetchServices() {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('category', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Erreur lors de la récupération des services:', error);
+        return;
+      }
+
+      setServices(data);
+    }
+
+    fetchServices();
+  }, []);
+
+  // Fonction pour obtenir le nom d'un service par son ID
+  const getServiceName = (serviceId) => {
+    const service = services.find(s => s.id === serviceId);
+    return service ? service.name : 'Service inconnu';
+  };
+
   return (
     <div className="space-y-8">
       {/* Section Vue d'ensemble */}
@@ -333,11 +360,17 @@ export default function DashboardGaragiste() {
                         <div className="text-sm text-gray-700 mt-1">
                           {appointment.start_time} - {appointment.end_time}
                         </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {appointment.email && <div>📧 {appointment.email}</div>}
+                          {appointment.phone && <div>📞 {appointment.phone}</div>}
+                        </div>
                         <div className="mt-3">
                           <strong className="text-gray-800">Services :</strong>
                           <ul className="list-disc pl-5 mt-1">
-                            {JSON.parse(appointment.services).map((service, index) => (
-                              <li key={index} className="text-sm text-gray-700">{service.name} - {service.price}€</li>
+                            {appointment.service_ids.map((serviceId, index) => (
+                              <li key={index} className="text-sm text-gray-700">
+                                {getServiceName(serviceId)}
+                              </li>
                             ))}
                           </ul>
                         </div>
