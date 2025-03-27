@@ -1,5 +1,6 @@
 import Link from "next/link";
 import "./globals.css"; // Assure-toi d'avoir un fichier de styles globaux
+import { Analytics } from "@vercel/analytics/react";
 
 export default function RootLayout({ children }) {
   return (
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
         <main className="max-w-7xl mx-auto">
           {children}
         </main>
+        <Analytics />
       </body>
     </html>
   );
