@@ -229,10 +229,39 @@ export default function AppointmentsPage() {
 
   const handleServiceSelect = (service) => {
     setSelectedServices(prev => {
-      const exists = prev.some(s => s.id === service.id);
-      if (exists) {
+      // Si le service est déjà sélectionné, on le retire
+      if (prev.some(s => s.id === service.id)) {
         return prev.filter(s => s.id !== service.id);
       }
+
+      // Si c'est un service de lavage
+      if (service.category === 'lavage') {
+        // Si c'est la formule complète
+        if (service.name.includes("intérieur") && service.name.includes("extérieur")) {
+          // Retirer tous les autres services de lavage
+          return [...prev.filter(s => s.category !== 'lavage'), service];
+        }
+        
+        // Si c'est un service intérieur
+        if (service.name.includes("intérieur")) {
+          // Retirer la formule complète et les autres services intérieurs
+          return [...prev.filter(s => 
+            s.category !== 'lavage' || 
+            (!s.name.includes("intérieur") && !s.name.includes("extérieur"))
+          ), service];
+        }
+        
+        // Si c'est un service extérieur
+        if (service.name.includes("extérieur")) {
+          // Retirer la formule complète et les autres services extérieurs
+          return [...prev.filter(s => 
+            s.category !== 'lavage' || 
+            (!s.name.includes("extérieur") && !s.name.includes("extérieur"))
+          ), service];
+        }
+      }
+
+      // Pour les autres services, on peut en avoir plusieurs
       return [...prev, service];
     });
   };
@@ -242,7 +271,24 @@ export default function AppointmentsPage() {
   };
 
   const isServiceDisabled = (service) => {
-    return false; // Plus de logique de désactivation
+    // Si le lavage complet est sélectionné, désactiver tous les autres services de lavage
+    const hasCompleteWash = selectedServices.some(s => 
+      s.category === 'lavage' && 
+      s.name.includes("intérieur") && 
+      s.name.includes("extérieur")
+    );
+
+    // Ne jamais désactiver le service complet lui-même
+    if (service.name.includes("intérieur") && service.name.includes("extérieur")) {
+      return false;
+    }
+
+    // Désactiver les autres services de lavage si le complet est sélectionné
+    if (hasCompleteWash && service.category === 'lavage') {
+      return true;
+    }
+
+    return false;
   };
 
   const isDateAvailable = (date) => {
@@ -363,42 +409,151 @@ export default function AppointmentsPage() {
           </div>
 
           {/* Services Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services[activeCategory]?.map(service => {
-              // Générer le nom de l'image en fonction du type de service
-              let imageName = service.name.toLowerCase().replace(/\s+/g, '_');
-              if (service.category === 'lavage') {
-                // Pour les services de lavage, réorganiser les mots dans l'ordre correct
-                const words = service.name.toLowerCase().split(' ');
-                if (words.includes('intérieur') || words.includes('extérieur')) {
-                  const type = words.includes('intérieur') ? 'interieur' : 'exterieur';
-                  const variant = words.includes('express') ? 'express' : 'integral';
-                  imageName = `lavage_${type}_${variant}`;
-                }
-              }
+          {activeCategory === 'lavage' ? (
+            <div className="space-y-8">
+              {/* Formule complète */}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Formule complète</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {services[activeCategory]?.filter(service => 
+                    service.name.includes("intérieur") && service.name.includes("extérieur")
+                  ).map(service => (
+                    <div
+                      key={service.id}
+                      className={`p-6 rounded-lg border relative overflow-hidden ${
+                        selectedServices.some(s => s.id === service.id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : isServiceDisabled(service)
+                          ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                          : 'border-gray-200 hover:border-blue-300'
+                      } cursor-pointer transition-all duration-200`}
+                      onClick={() => !isServiceDisabled(service) && handleServiceSelect(service)}
+                    >
+                      <div className="absolute inset-0 z-0">
+                        <Image
+                          src="/images/lavage_complet.jpg"
+                          alt={service.name}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-cover opacity-20"
+                        />
+                      </div>
+                      <div className="relative z-10">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h3>
+                        <p className="text-gray-600 mb-4">{service.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
+                          <span className="text-sm text-gray-500">{service.duration} min</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-              return (
+              {/* Lavage intérieur */}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Lavage intérieur</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {services[activeCategory]?.filter(service => 
+                    service.name.includes("intérieur") && !service.name.includes("extérieur")
+                  ).map(service => (
+                    <div
+                      key={service.id}
+                      className={`p-6 rounded-lg border relative overflow-hidden ${
+                        selectedServices.some(s => s.id === service.id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : isServiceDisabled(service)
+                          ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                          : 'border-gray-200 hover:border-blue-300'
+                      } cursor-pointer transition-all duration-200`}
+                      onClick={() => !isServiceDisabled(service) && handleServiceSelect(service)}
+                    >
+                      <div className="absolute inset-0 z-0">
+                        <Image
+                          src="/images/lavage_interieur.jpg"
+                          alt={service.name}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-cover opacity-20"
+                        />
+                      </div>
+                      <div className="relative z-10">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h3>
+                        <p className="text-gray-600 mb-4">{service.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
+                          <span className="text-sm text-gray-500">{service.duration} min</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lavage extérieur */}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Lavage extérieur</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {services[activeCategory]?.filter(service => 
+                    service.name.includes("extérieur") && !service.name.includes("intérieur")
+                  ).map(service => (
+                    <div
+                      key={service.id}
+                      className={`p-6 rounded-lg border relative overflow-hidden ${
+                        selectedServices.some(s => s.id === service.id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : isServiceDisabled(service)
+                          ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                          : 'border-gray-200 hover:border-blue-300'
+                      } cursor-pointer transition-all duration-200`}
+                      onClick={() => !isServiceDisabled(service) && handleServiceSelect(service)}
+                    >
+                      <div className="absolute inset-0 z-0">
+                        <Image
+                          src="/images/lavage_exterieur.jpg"
+                          alt={service.name}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          className="object-cover opacity-20"
+                        />
+                      </div>
+                      <div className="relative z-10">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h3>
+                        <p className="text-gray-600 mb-4">{service.description}</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
+                          <span className="text-sm text-gray-500">{service.duration} min</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {services[activeCategory]?.map(service => (
                 <div
                   key={service.id}
                   className={`p-6 rounded-lg border relative overflow-hidden ${
                     selectedServices.some(s => s.id === service.id)
                       ? 'border-blue-500 bg-blue-50'
+                      : isServiceDisabled(service)
+                      ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                       : 'border-gray-200 hover:border-blue-300'
                   } cursor-pointer transition-all duration-200`}
-                  onClick={() => handleServiceSelect(service)}
+                  onClick={() => !isServiceDisabled(service) && handleServiceSelect(service)}
                 >
-                  {/* Image de fond */}
                   <div className="absolute inset-0 z-0">
                     <Image
-                      src={`/images/${imageName}.jpg`}
+                      src={`/images/${service.name.toLowerCase().replace(/\s+/g, '_')}.jpg`}
                       alt={service.name}
                       fill
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       className="object-cover opacity-20"
                     />
                   </div>
-                  
-                  {/* Contenu */}
                   <div className="relative z-10">
                     <h3 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h3>
                     <p className="text-gray-600 mb-4">{service.description}</p>
@@ -408,9 +563,9 @@ export default function AppointmentsPage() {
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Next button */}
           <div className="flex justify-end mt-8">
