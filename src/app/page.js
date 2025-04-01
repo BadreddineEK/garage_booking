@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import supabase from "@/utils/supabase";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export default function Home() {
   const router = useRouter();
@@ -227,6 +228,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      <SpeedInsights />
     </div>
   );
 }
