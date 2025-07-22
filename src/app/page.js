@@ -182,7 +182,7 @@ export default function Home() {
             {filteredBusinesses.map(business => (
               <div 
                 key={business.id}
-                className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer overflow-hidden"
+                className="bg-white rounded-lg shadow-md hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
                 onClick={() => handleBusinessClick(business.id)}
               >
                 {/* Business Image */}
@@ -229,7 +229,7 @@ export default function Home() {
                     ))}
                   </div>
                   
-                  <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-200">
+                  <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 group-hover:bg-blue-700">
                     Voir les disponibilités
                   </button>
                 </div>

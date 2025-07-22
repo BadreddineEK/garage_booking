@@ -73,15 +73,35 @@ export default function RootLayout({ children }) {
             </div>
           </div>
 
-          {/* Mobile menu - can be expanded later */}
-          <div className="md:hidden px-6 py-3 border-t border-gray-200">
-            <Link 
-              href="/pro"
-              className="inline-flex items-center text-green-600 hover:text-green-700"
-            >
-              <span className="mr-1">💼</span>
-              Espace Professionnel
-            </Link>
+          {/* Mobile menu - expanded */}
+          <div className="md:hidden px-6 py-3 border-t border-gray-200 space-y-2">
+            <div className="flex flex-col space-y-2">
+              <Link 
+                href="/" 
+                className="text-gray-600 hover:text-blue-600 transition-colors duration-200 py-2"
+              >
+                Accueil
+              </Link>
+              <Link 
+                href="/search" 
+                className="text-gray-600 hover:text-blue-600 transition-colors duration-200 py-2"
+              >
+                Rechercher
+              </Link>
+              <Link 
+                href="/how-it-works" 
+                className="text-gray-600 hover:text-blue-600 transition-colors duration-200 py-2"
+              >
+                Comment ça marche
+              </Link>
+              <Link 
+                href="/pro"
+                className="inline-flex items-center text-green-600 hover:text-green-700 py-2"
+              >
+                <span className="mr-1">💼</span>
+                Espace Professionnel
+              </Link>
+            </div>
           </div>
         </nav>
         
