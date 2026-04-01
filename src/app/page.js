@@ -3,231 +3,291 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import supabase from "@/utils/supabase";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export default function Home() {
   const router = useRouter();
-  const [selectedService, setSelectedService] = useState(null);
-  const [services, setServices] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [businesses, setBusinesses] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Récupérer les services depuis la base de données
-  useEffect(() => {
-    async function fetchServices() {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .order('category', { ascending: true })
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Erreur lors de la récupération des services:', error);
-        return;
-      }
-
-      setServices(data);
-      setIsLoading(false);
+  // Mock data for businesses (in real app, this would come from Supabase)
+  const mockBusinesses = [
+    {
+      id: 1,
+      name: "O'G Automobiles",
+      category: "Garage Automobile",
+      description: "Spécialiste du lavage automobile et de la mécanique",
+      location: "Beynost, 01700",
+      rating: 4.8,
+      reviews: 127,
+      image: "/api/placeholder/300/200",
+      services: ["Lavage", "Mécanique", "Réparation"],
+      priceRange: "€€",
+      verified: true
+    },
+    {
+      id: 2,
+      name: "AutoCare Plus",
+      category: "Garage Automobile",
+      description: "Entretien complet et réparations automobiles",
+      location: "Lyon, 69000",
+      rating: 4.6,
+      reviews: 89,
+      image: "/api/placeholder/300/200",
+      services: ["Entretien", "Diagnostic", "Pneumatiques"],
+      priceRange: "€€€",
+      verified: true
+    },
+    {
+      id: 3,
+      name: "Moto Service Lyon",
+      category: "Garage Moto",
+      description: "Réparation et entretien motos et scooters",
+      location: "Villeurbanne, 69100",
+      rating: 4.7,
+      reviews: 156,
+      image: "/api/placeholder/300/200",
+      services: ["Moto", "Scooter", "Entretien"],
+      priceRange: "€€",
+      verified: false
+    },
+    {
+      id: 4,
+      name: "Carrosserie Express",
+      category: "Carrosserie",
+      description: "Réparation carrosserie et peinture automobile",
+      location: "Meyzieu, 69330",
+      rating: 4.5,
+      reviews: 74,
+      image: "/api/placeholder/300/200",
+      services: ["Carrosserie", "Peinture", "Débosselage"],
+      priceRange: "€€€",
+      verified: true
+    },
+    {
+      id: 5,
+      name: "Pneus & Services",
+      category: "Pneumatiques",
+      description: "Vente et montage de pneumatiques",
+      location: "Décines, 69150",
+      rating: 4.3,
+      reviews: 92,
+      image: "/api/placeholder/300/200",
+      services: ["Pneumatiques", "Jantes", "Parallélisme"],
+      priceRange: "€",
+      verified: true
+    },
+    {
+      id: 6,
+      name: "Contrôle Technique Rhône",
+      category: "Contrôle Technique",
+      description: "Contrôle technique automobile rapide",
+      location: "Bron, 69500",
+      rating: 4.4,
+      reviews: 203,
+      image: "/api/placeholder/300/200",
+      services: ["Contrôle technique", "Contre-visite"],
+      priceRange: "€",
+      verified: true
     }
+  ];
 
-    fetchServices();
+  useEffect(() => {
+    setBusinesses(mockBusinesses);
   }, []);
 
-  const handleServiceClick = (service) => {
-    setSelectedService(service);
-    router.push(`/appointments?service=${service.id}`);
+  const categories = [
+    { id: "all", name: "Tous les services" },
+    { id: "Garage Automobile", name: "Garages Automobile" },
+    { id: "Garage Moto", name: "Garages Moto" },
+    { id: "Carrosserie", name: "Carrosserie" },
+    { id: "Pneumatiques", name: "Pneumatiques" },
+    { id: "Contrôle Technique", name: "Contrôle Technique" }
+  ];
+
+  const filteredBusinesses = businesses.filter(business => {
+    const matchesSearch = business.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         business.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         business.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || business.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleBusinessClick = (businessId) => {
+    router.push(`/business/${businessId}`);
   };
 
-  // Organiser les services par catégorie
-  const servicesByCategory = services.reduce((acc, service) => {
-    if (!acc[service.category]) {
-      acc[service.category] = [];
-    }
-    acc[service.category].push(service);
-    return acc;
-  }, {});
-
   return (
-    <div className="p-8 bg-white">
-      {/* Section Hero */}
-      <div className="bg-gray-50 p-8 rounded-lg shadow-sm border border-gray-100 mb-12">
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">Bienvenue à O&apos;G Automobiles</h1>
-        <p className="text-xl text-gray-700 mb-8">
-          Votre spécialiste du lavage automobile et de la mécanique à Beynost
-        </p>
-        <div className="flex justify-center">
-          <Link 
-            href="/appointments" 
-            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors duration-200"
-          >
-            Prendre un RDV maintenant
-          </Link>
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-16">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            Trouvez le garage parfait près de chez vous
+          </h1>
+          <p className="text-xl md:text-2xl mb-8 opacity-90">
+            Découvrez et réservez chez les meilleurs professionnels automobiles
+          </p>
+          
+          {/* Search Bar */}
+          <div className="max-w-2xl mx-auto bg-white rounded-lg p-2 shadow-lg">
+            <div className="flex flex-col md:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Rechercher un garage, service..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-3 text-gray-800 rounded-md border-0 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-4 py-3 text-gray-800 rounded-md border-0 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Section Services */}
-      <div className="mb-12">
-        <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">Nos Services</h2>
-        
+      {/* Business Listings */}
+      <div className="max-w-7xl mx-auto px-6 py-12">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-800">
+            {filteredBusinesses.length} professionnel{filteredBusinesses.length > 1 ? 's' : ''} trouvé{filteredBusinesses.length > 1 ? 's' : ''}
+          </h2>
+          
+          {/* Professional CTA */}
+          <Link 
+            href="/pro/register"
+            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors duration-200"
+          >
+            Vous êtes professionnel ?
+          </Link>
+        </div>
+
         {isLoading ? (
-          <div className="text-center py-8">
+          <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           </div>
         ) : (
-          <>
-            {/* Services de Lavage */}
-            <div className="mb-12">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">Lavage</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {servicesByCategory.lavage
-                  ?.sort((a, b) => {
-                    // Mettre la formule complète en premier
-                    if (a.name.includes("intérieur") && a.name.includes("extérieur")) return -1;
-                    if (b.name.includes("intérieur") && b.name.includes("extérieur")) return 1;
-                    return 0;
-                  })
-                  .map(service => (
-                    <div 
-                      key={service.id} 
-                      className={`bg-white p-6 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 cursor-pointer ${
-                        service.name.includes("intérieur") && service.name.includes("extérieur")
-                          ? 'border-2 border-blue-500'
-                          : ''
-                      }`}
-                      onClick={() => handleServiceClick(service)}
-                    >
-                      <h4 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h4>
-                      <p className="text-gray-600 mb-4">{service.description}</p>
-                      <div className="flex justify-between items-center">
-                        <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
-                        <span className="text-sm text-gray-500">{service.duration} min</span>
-                      </div>
-                      <button 
-                        className={`mt-4 w-full py-2 rounded transition-colors duration-200 ${
-                          service.name.includes("intérieur") && service.name.includes("extérieur")
-                            ? 'bg-blue-700 text-white hover:bg-blue-800'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredBusinesses.map(business => (
+              <div 
+                key={business.id}
+                className="bg-white rounded-lg shadow-md hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
+                onClick={() => handleBusinessClick(business.id)}
+              >
+                {/* Business Image */}
+                <div className="h-48 bg-gray-200 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                    <span className="text-white text-6xl">🔧</span>
+                  </div>
+                  {business.verified && (
+                    <div className="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
+                      ✓ Vérifié
+                    </div>
+                  )}
+                </div>
+
+                {/* Business Info */}
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-bold text-gray-800">{business.name}</h3>
+                    <span className="text-sm font-semibold text-gray-600">{business.priceRange}</span>
+                  </div>
+                  
+                  <p className="text-gray-600 mb-3">{business.description}</p>
+                  
+                  <div className="flex items-center mb-3">
+                    <span className="text-yellow-400 mr-1">⭐</span>
+                    <span className="font-semibold">{business.rating}</span>
+                    <span className="text-gray-500 ml-1">({business.reviews} avis)</span>
+                  </div>
+                  
+                  <div className="flex items-center text-gray-500 mb-4">
+                    <span className="mr-1">📍</span>
+                    <span>{business.location}</span>
+                  </div>
+                  
+                  {/* Services */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {business.services.slice(0, 3).map((service, index) => (
+                      <span 
+                        key={index}
+                        className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium"
                       >
-                        Réserver ce service
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            {/* Services de Mécanique */}
-            <div className="mb-12">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">Mécanique</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {servicesByCategory.mecanique?.map(service => (
-                  <div 
-                    key={service.id} 
-                    className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 cursor-pointer"
-                    onClick={() => handleServiceClick(service)}
-                  >
-                    <h4 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h4>
-                    <p className="text-gray-600 mb-4">{service.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
-                      <span className="text-sm text-gray-500">{service.duration} min</span>
-                    </div>
-                    <button 
-                      className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors duration-200"
-                    >
-                      Réserver ce service
-                    </button>
+                        {service}
+                      </span>
+                    ))}
                   </div>
-                ))}
+                  
+                  <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-200 group-hover:bg-blue-700">
+                    Voir les disponibilités
+                  </button>
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
+        )}
 
-            {/* Autres Services */}
-            <div className="mb-12">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">Autres Services</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {servicesByCategory.autre?.map(service => (
-                  <div 
-                    key={service.id} 
-                    className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200 cursor-pointer"
-                    onClick={() => handleServiceClick(service)}
-                  >
-                    <h4 className="text-xl font-semibold text-gray-800 mb-2">{service.name}</h4>
-                    <p className="text-gray-600 mb-4">{service.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-2xl font-bold text-blue-600">{service.price}€</span>
-                      <span className="text-sm text-gray-500">{service.duration} min</span>
-                    </div>
-                    <button 
-                      className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors duration-200"
-                    >
-                      Réserver ce service
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
+        {filteredBusinesses.length === 0 && !isLoading && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Aucun résultat trouvé</h3>
+            <p className="text-gray-600">Essayez de modifier vos critères de recherche</p>
+          </div>
         )}
       </div>
 
-      {/* Section Contact */}
-      <div className="bg-gray-50 p-8 rounded-lg shadow-sm border border-gray-100">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">Contactez-nous</h2>
-          <p className="text-lg text-gray-700">
-            Une question ? Un projet ? N&apos;hésitez pas à nous contacter !
-          </p>
-        </div>
-        <div className="flex justify-center">
-          <Link 
-            href="/contact" 
-            className="inline-block bg-green-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-green-700 transition-colors duration-200"
-          >
-            Nous contacter
-          </Link>
-        </div>
-      </div>
-
-      {/* Section Informations */}
-      <div className="mt-12 bg-gray-50 p-8 rounded-lg shadow-sm border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Informations Pratiques</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">📍 Adresse</h3>
-            <p className="text-gray-700">
-              604 Route de Geneve<br />
-              01700 Beynost<br />
-              France
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">⏰ Horaires d&apos;ouverture</h3>
-            <p className="text-gray-700">
-              Lundi - Vendredi : 8h00 - 19h00<br />
-              Samedi : 9h00 - 17h00<br />
-              Dimanche : 9h00 - 12h00
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">📞 Contact</h3>
-            <p className="text-gray-700">
-              Téléphone : 07 45 82 08 94<br />
-              Email : contact@garage.fr<br />
-              Snapchat : OG.AUTO69
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">💳 Paiement</h3>
-            <p className="text-gray-700">
-              Nous acceptons :<br />
-              - Carte bancaire<br />
-              - Espèces<br />
-              - Virement bancaire
-            </p>
+      {/* How it works section */}
+      <div className="bg-white py-16">
+        <div className="max-w-7xl mx-auto px-6">
+          <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
+            Comment ça marche ?
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🔍</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-3">1. Recherchez</h3>
+              <p className="text-gray-600">
+                Trouvez le professionnel qui correspond à vos besoins près de chez vous
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📅</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-3">2. Réservez</h3>
+              <p className="text-gray-600">
+                Choisissez votre créneau et réservez en ligne en quelques clics
+              </p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">✨</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-3">3. Profitez</h3>
+              <p className="text-gray-600">
+                Rendez-vous chez votre professionnel et profitez du service
+              </p>
+            </div>
           </div>
         </div>
       </div>
+      
       <SpeedInsights />
     </div>
   );
